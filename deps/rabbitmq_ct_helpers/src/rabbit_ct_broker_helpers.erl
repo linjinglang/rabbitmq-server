@@ -787,10 +787,12 @@ query_node(Config, NodeConfig) ->
       [rabbit, plugins_dir]),
     {ok, EnabledPluginsFile} = rpc(Config, Nodename, application, get_env,
       [rabbit, enabled_plugins_file]),
+    LogLocations = rpc(Config, Nodename, rabbit, log_locations, []),
     Vars0 = [{pid_file, PidFile},
              {mnesia_dir, MnesiaDir},
              {plugins_dir, PluginsDir},
-             {enabled_plugins_file, EnabledPluginsFile}],
+             {enabled_plugins_file, EnabledPluginsFile},
+             {log_locations, LogLocations}],
     Vars = try
                EnabledFeatureFlagsFile = rpc(Config, Nodename,
                                              rabbit_feature_flags,
@@ -1014,8 +1016,7 @@ stop_rabbitmq_nodes(Config) ->
           fun(NodeConfig) ->
                   stop_rabbitmq_node(Config, NodeConfig)
           end),
-    IgnoredCrashes = ["** force_vhost_failure"],
-    find_crashes_in_logs(NodeConfigs, IgnoredCrashes),
+    find_crashes_in_logs(NodeConfigs),
     proplists:delete(rmq_nodes, Config).
 
 stop_rabbitmq_node(Config, NodeConfig) ->
@@ -1036,42 +1037,41 @@ stop_rabbitmq_node(Config, NodeConfig) ->
     end,
     NodeConfig.
 
-find_crashes_in_logs(NodeConfigs, IgnoredCrashes) ->
+find_crashes_in_logs(NodeConfigs) ->
     ct:pal(
       "Looking up any crash reports in the nodes' log files. If we find "
       "some, they will appear below:"),
     CrashesCount = lists:foldl(
                      fun(NodeConfig, Total) ->
-                             Count = count_crashes_in_logs(
-                                       NodeConfig, IgnoredCrashes),
+                             Count = count_crashes_in_logs(NodeConfig),
                              Total + Count
                      end, 0, NodeConfigs),
     ct:pal("Found ~b crash report(s)", [CrashesCount]),
     ?assertEqual(0, CrashesCount).
 
-count_crashes_in_logs(NodeConfig, IgnoredCrashes) ->
+count_crashes_in_logs(NodeConfig) ->
     LogLocations = ?config(log_locations, NodeConfig),
     lists:foldl(
       fun(LogLocation, Total) ->
-              Count = count_crashes_in_log(LogLocation, IgnoredCrashes),
+              Count = count_crashes_in_log(LogLocation),
               Total + Count
       end, 0, LogLocations).
 
-count_crashes_in_log(LogLocation, IgnoredCrashes) ->
+count_crashes_in_log(LogLocation) ->
     case file:read_file(LogLocation) of
-        {ok, Content} -> count_crashes_in_content(Content, IgnoredCrashes);
+        {ok, Content} -> count_crashes_in_content(Content);
         _             -> 0
     end.
 
-count_crashes_in_content(Content, IgnoredCrashes) ->
+count_crashes_in_content(Content) ->
     ReOpts = [multiline],
     Lines = re:split(Content, "^", ReOpts),
-    count_gen_server_terminations(Lines, IgnoredCrashes).
+    count_gen_server_terminations(Lines).
 
-count_gen_server_terminations(Lines, IgnoredCrashes) ->
-    count_gen_server_terminations(Lines, 0, IgnoredCrashes).
+count_gen_server_terminations(Lines) ->
+    count_gen_server_terminations(Lines, 0).
 
-count_gen_server_terminations([Line | Rest], Count, IgnoredCrashes) ->
+count_gen_server_terminations([Line | Rest], Count) ->
     ReOpts = [{capture, all_but_first, list}],
     Ret = re:run(
             Line,
@@ -1079,40 +1079,26 @@ count_gen_server_terminations([Line | Rest], Count, IgnoredCrashes) ->
             ReOpts),
     case Ret of
         {match, [Prefix]} ->
-            capture_gen_server_termination(
-              Rest, Prefix, [Line], Count, IgnoredCrashes);
+            capture_gen_server_termination(Rest, Prefix, [Line], Count + 1);
         nomatch ->
-            count_gen_server_terminations(Rest, Count, IgnoredCrashes)
+            count_gen_server_terminations(Rest, Count)
     end;
-count_gen_server_terminations([], Count, _IgnoredCrashes) ->
+count_gen_server_terminations([], Count) ->
     Count.
 
-capture_gen_server_termination(
-  [Line | Rest] = Lines, Prefix, Acc, Count, IgnoredCrashes) ->
-    ReOpts = [{capture, all_but_first, list}],
-    Ret = re:run(Line, Prefix ++ "( .*|\\*.*|)$", ReOpts),
+capture_gen_server_termination([Line | Rest] = Lines, Prefix, Acc, Count) ->
+    ReOpts = [{capture, none}],
+    Ret = re:run(Line, Prefix ++ "( |\\*|$)", ReOpts),
     case Ret of
-        {match, [Suffix]} ->
-            case lists:member(Suffix, IgnoredCrashes) of
-                false ->
-                    capture_gen_server_termination(
-                      Rest, Prefix, [Line | Acc], Count, IgnoredCrashes);
-                true ->
-                    count_gen_server_terminations(
-                      Lines, Count, IgnoredCrashes)
-            end;
+        match ->
+            capture_gen_server_termination(Rest, Prefix, [Line | Acc], Count);
         nomatch ->
-            found_gen_server_termiation(
-              lists:reverse(Acc), Lines, Count, IgnoredCrashes)
+            ct:pal("gen_server termination:~n~n~s", [lists:reverse(Acc)]),
+            count_gen_server_terminations(Lines, Count)
     end;
-capture_gen_server_termination(
-  [] = Rest, _Prefix, Acc, Count, IgnoredCrashes) ->
-    found_gen_server_termiation(
-      lists:reverse(Acc), Rest, Count, IgnoredCrashes).
-
-found_gen_server_termiation(Message, Lines, Count, IgnoredCrashes) ->
-    ct:pal("gen_server termination:~n~n~s", [Message]),
-    count_gen_server_terminations(Lines, Count + 1, IgnoredCrashes).
+capture_gen_server_termination([] = Rest, _Prefix, Acc, Count) ->
+    ct:pal("gen_server termination:~n~n~s", [lists:reverse(Acc)]),
+    count_gen_server_terminations(Rest, Count).
 
 %% -------------------------------------------------------------------
 %% Helpers for partition simulation
