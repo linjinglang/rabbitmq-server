@@ -21,6 +21,11 @@
 -export([info/1, info/2]).
 -export([ring_state/2]).
 
+-export([mds_migration/3,
+         mnesia_write_to_khepri/3,
+         mnesia_delete_to_khepri/3,
+         clear_data_in_khepri/2]).
+
 -rabbit_boot_step(
    {rabbit_exchange_type_consistent_hash_registry,
     [{description, "exchange type x-consistent-hash: registry"},
@@ -37,6 +42,15 @@
      {mfa,         {?MODULE, init, []}},
      {requires,    database},
      {enables,     external_infrastructure}]}).
+
+-rabbit_feature_flag(
+   {rabbit_consistent_hash_exchange_raft_based_metadata_store,
+    #{desc          => "Use the new Raft-based metadata store",
+      doc_url       => "", %% TODO
+      stability     => experimental,
+      depends_on    => [raft_based_metadata_store_phase1],
+      migration_fun => {?MODULE, mds_migration}
+     }}).
 
 %% This data model allows for efficient routing and exchange deletion
 %% but less efficient (linear) binding management.
@@ -449,6 +463,41 @@ ring_state(VirtualHost, Exchange) ->
 assert_args_equivalence(X, Args) ->
     rabbit_exchange:assert_args_equivalence(X, Args).
 
+mds_migration(FeatureName, FeatureProps, IsEnabled) ->
+    TablesAndOwners = [{?HASH_RING_STATE_TABLE, ?MODULE, #{}}],
+    rabbit_core_ff:mds_migration(FeatureName, FeatureProps, TablesAndOwners, IsEnabled).
+
+clear_data_in_khepri(?HASH_RING_STATE_TABLE, _ExtraArgs) ->
+    case rabbit_khepri:delete(khepri_consistent_hash_path()) of
+        {ok, _} ->
+            ok;
+        Error ->
+            throw(Error)
+    end.
+
+mnesia_write_to_khepri(?HASH_RING_STATE_TABLE, #chx_hash_ring{exchange = XName} = Record,
+                       _ExtraArgs) ->
+    case rabbit_khepri:create(khepri_consistent_hash_path(XName), Record) of
+        {ok, _} -> ok;
+        {error, {mismatching_node, _}} -> ok;
+        Error -> throw(Error)
+    end.
+
+mnesia_delete_to_khepri(?HASH_RING_STATE_TABLE, #chx_hash_ring{exchange = XName}, _ExtraArgs) ->
+    case rabbit_khepri:delete(khepri_consistent_hash_path(XName)) of
+        {ok, _} ->
+            ok;
+        Error ->
+            throw(Error)
+    end;
+mnesia_delete_to_khepri(?HASH_RING_STATE_TABLE, Key, _ExtraArgs) ->
+    case rabbit_khepri:delete(khepri_consistent_hash_path(Key)) of
+        {ok, _} ->
+            ok;
+        Error ->
+            throw(Error)
+    end.
+
 %%
 %% Jump-consistent hashing.
 %%
@@ -519,3 +568,6 @@ khepri_consistent_hash_path(#exchange{name = Name}) ->
     khepri_consistent_hash_path(Name);
 khepri_consistent_hash_path(#resource{virtual_host = VHost, name = Name}) ->
     [?MODULE, exchange_type_consistent_hash_ring_state, VHost, Name].
+
+khepri_consistent_hash_path() ->
+    [?MODULE, exchange_type_consistent_hash_ring_state].
