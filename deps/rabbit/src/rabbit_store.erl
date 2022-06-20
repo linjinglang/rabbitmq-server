@@ -1336,7 +1336,57 @@ mnesia_delete_to_khepri(rabbit_queue, Name, _ExtraArgs) when is_record(Name, res
 mnesia_delete_to_khepri(rabbit_durable_queue, Q, _ExtraArgs) when ?is_amqqueue(Q) ->
     khepri_delete(khepri_durable_queue_path(amqqueue:get_name(Q)));
 mnesia_delete_to_khepri(rabbit_durable_queue, Name, _ExtraArgs) when is_record(Name, resource) ->
-    khepri_delete(khepri_durable_queue_path(Name)).
+    khepri_delete(khepri_durable_queue_path(Name));
+mnesia_delete_to_khepri(rabbit_listener, Listener, _ExtraArgs) when is_record(Listener, listener) ->
+    khepri_delete(khepri_listener_path(Listener#listener.node));
+mnesia_delete_to_khepri(rabbit_listener, Node, _ExtraArgs) ->
+    khepri_delete(khepri_listener_path(Node));
+mnesia_delete_to_khepri(rabbit_exchange, Exchange, _ExtraArgs) when is_record(Exchange, exchange) ->
+    khepri_delete(khepri_exchange_path(Exchange#exchange.name));
+mnesia_delete_to_khepri(rabbit_exchange, Name, _ExtraArgs) ->
+    khepri_delete(khepri_exchange_path(Name));
+mnesia_delete_to_khepri(rabbit_durable_exchange, Exchange, _ExtraArgs)
+  when is_record(Exchange, exchange) ->
+    khepri_delete(khepri_exchange_path(Exchange#exchange.name));
+mnesia_delete_to_khepri(rabbit_durable_exchange, Name, _ExtraArgs) ->
+    khepri_delete(khepri_exchange_path(Name));
+mnesia_delete_to_khepri(rabbit_exchange_serial, ExchangeSerial, _ExtraArgs)
+  when is_record(ExchangeSerial, exchange_serial) ->
+    khepri_delete(khepri_exchange_serial_path(ExchangeSerial#exchange_serial.name));
+mnesia_delete_to_khepri(rabbit_exchange_serial, Name, _ExtraArgs) ->
+    khepri_delete(khepri_exchange_serial_path(Name));
+mnesia_delete_to_khepri(rabbit_route, Route, _ExtraArgs) when is_record(Route, route) ->
+    khepri_delete(khepri_route_path(Route#route.binding));
+mnesia_delete_to_khepri(rabbit_route, Name, _ExtraArgs) ->
+    khepri_delete(khepri_route_path(Name));
+mnesia_delete_to_khepri(rabbit_durable_route, Route, _ExtraArgs) when is_record(Route, route) ->
+    khepri_delete(khepri_route_path(Route#route.binding));
+mnesia_delete_to_khepri(rabbit_durable_route, Name, _ExtraArgs) ->
+    khepri_delete(khepri_route_path(Name));
+mnesia_delete_to_khepri(rabbit_semi_durable_route, Route, _ExtraArgs) when is_record(Route, route) ->
+    khepri_delete(khepri_route_path(Route#route.binding));
+mnesia_delete_to_khepri(rabbit_semi_durable_route, Name, _ExtraArgs) ->
+    khepri_delete(khepri_route_path(Name));
+mnesia_delete_to_khepri(rabbit_topic_trie_binding, #topic_trie_binding{}, _ExtraArgs) ->
+    %% TODO No routing keys here, how do we do? Use the node_id to search on the tree?
+    %% Can we still query mnesia content?
+    ok;
+mnesia_delete_to_khepri(rabbit_topic_trie_node, #topic_trie_node{}, _ExtraArgs) ->
+    %% TODO see above
+    ok;
+mnesia_delete_to_khepri(rabbit_topic_trie_edge, #topic_trie_edge{}, _ExtraArgs) ->
+    %% TODO see above
+    ok;
+mnesia_delete_to_khepri(_Table, Record, #{type := tracking, name := Name, node := Node,
+                                          key := KeyPos}) when size(Record) > 2 ->
+    khepri_delete(khepri_tracking_path(Name, Node, as_list(element(KeyPos, Record))));
+mnesia_delete_to_khepri(_Table, Key, #{type := tracking, name := Name, node := Node}) ->
+    khepri_delete(khepri_tracking_path(Name, Node, as_list(Key)));
+mnesia_delete_to_khepri(_Table, Record, #{type := tracking_counter, name := Name, node := Node,
+                                          key := KeyPos}) when size(Record) > 2 ->
+    khepri_delete(khepri_tracking_path(Name, Node, as_list(element(KeyPos, Record))));
+mnesia_delete_to_khepri(_Table, Key, #{type := tracking_counter, name := Name, node := Node}) ->
+    khepri_delete(khepri_tracking_path(Name, Node, as_list(Key))).
 
 clear_data_in_khepri(rabbit_queue, _ExtraArgs) ->
     khepri_delete(khepri_queues_path());
