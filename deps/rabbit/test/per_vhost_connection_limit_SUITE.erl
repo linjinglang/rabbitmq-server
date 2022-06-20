@@ -32,7 +32,9 @@ groups() ->
         single_node_multiple_vhosts_limit,
         single_node_multiple_vhosts_zero_limit
     ],
-    ClusterSize2Tests = [
+    %% Use a cluster size of 3 so the khepri metadata store can keep
+    %% making progress even if one node is down/stopped
+    ClusterSize3Tests = [
         most_basic_cluster_connection_count,
         cluster_single_vhost_connection_count,
         cluster_multiple_vhosts_connection_count,
@@ -46,18 +48,18 @@ groups() ->
     [
      {mnesia_store, [], [
                          {cluster_size_1_network, [], ClusterSize1Tests},
-                         {cluster_size_2_network, [], ClusterSize2Tests},
+                         {cluster_size_3_network, [], ClusterSize3Tests},
                          {cluster_size_1_direct, [], ClusterSize1Tests},
-                         {cluster_size_2_direct, [], ClusterSize2Tests},
+                         {cluster_size_3_direct, [], ClusterSize3Tests},
                          {cluster_rename, [], [
                                                vhost_limit_after_node_renamed
                                               ]}
                         ]},
      {khepri_store, [], [
                          {cluster_size_1_network, [], ClusterSize1Tests},
-                         {cluster_size_2_network, [], ClusterSize2Tests},
+                         {cluster_size_3_network, [], ClusterSize3Tests},
                          {cluster_size_1_direct, [], ClusterSize1Tests},
-                         {cluster_size_2_direct, [], ClusterSize2Tests},
+                         {cluster_size_3_direct, [], ClusterSize3Tests},
                          {cluster_rename, [], [
                                                vhost_limit_after_node_renamed
                                               ]}
@@ -97,15 +99,15 @@ init_per_group(khepri_migration, Config) ->
 init_per_group(cluster_size_1_network, Config) ->
     Config1 = rabbit_ct_helpers:set_config(Config, [{connection_type, network}]),
     init_per_multinode_group(cluster_size_1_network, Config1, 1);
-init_per_group(cluster_size_2_network, Config) ->
+init_per_group(cluster_size_3_network, Config) ->
     Config1 = rabbit_ct_helpers:set_config(Config, [{connection_type, network}]),
-    init_per_multinode_group(cluster_size_2_network, Config1, 2);
+    init_per_multinode_group(cluster_size_3_network, Config1, 3);
 init_per_group(cluster_size_1_direct, Config) ->
     Config1 = rabbit_ct_helpers:set_config(Config, [{connection_type, direct}]),
     init_per_multinode_group(cluster_size_1_direct, Config1, 1);
-init_per_group(cluster_size_2_direct, Config) ->
+init_per_group(cluster_size_3_direct, Config) ->
     Config1 = rabbit_ct_helpers:set_config(Config, [{connection_type, direct}]),
-    init_per_multinode_group(cluster_size_2_direct, Config1, 2);
+    init_per_multinode_group(cluster_size_3_direct, Config1, 3);
 
 init_per_group(cluster_rename, Config) ->
     Config1 = rabbit_ct_helpers:set_config(Config, [{connection_type, network}]),
@@ -405,7 +407,7 @@ cluster_node_restart_connection_count(Config) ->
     ?awaitMatch(0, count_connections_in(Config, VHost), ?AWAIT, ?INTERVAL).
 
 cluster_node_list_on_node(Config) ->
-    [A, B] = rabbit_ct_broker_helpers:get_node_configs(Config, nodename),
+    [A, B, _C] = rabbit_ct_broker_helpers:get_node_configs(Config, nodename),
 
     ?assertEqual(0, length(all_connections(Config))),
     ?assertEqual(0, length(connections_on_node(Config, 0))),
@@ -711,7 +713,8 @@ vhost_limit_after_node_renamed(Config) ->
 
     [Conn3, Conn4] = open_connections(Config1, [{0, VHost}, {1, VHost}]),
     ?awaitMatch(2, count_connections_in(Config1, VHost), ?AWAIT, ?INTERVAL),
-    [{error, not_allowed}] = open_connections(Config1, [{0, VHost}, {1, VHost}]),
+    [{error, not_allowed}, {error, not_allowed}]
+        = open_connections(Config1, [{0, VHost}, {1, VHost}]),
     ?awaitMatch(2, count_connections_in(Config1, VHost), ?AWAIT, ?INTERVAL),
     close_connections([Conn3, Conn4]),
 
