@@ -39,7 +39,7 @@ description() ->
 serialise_events() -> false.
 
 route(X = #exchange{arguments = Args},
-      D = #delivery{message = #basic_message{content = Content}}) ->
+      M = #basic_message{content = Content}) ->
     %% This arg was introduced in the same release as this exchange type;
     %% it must be set
     {long, MaxHops} = rabbit_misc:table_lookup(Args, ?MAX_HOPS_ARG),
@@ -55,7 +55,7 @@ route(X = #exchange{arguments = Args},
             end,
     Headers = rabbit_basic:extract_headers(Content),
     case rabbit_federation_util:should_forward(Headers, MaxHops, DName, DVhost) of
-        true  -> rabbit_exchange_type_fanout:route(X, D);
+        true  -> rabbit_exchange_type_fanout:route(X, M);
         false -> []
     end.
 

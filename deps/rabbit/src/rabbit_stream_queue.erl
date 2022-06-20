@@ -19,7 +19,7 @@
          consume/3,
          cancel/5,
          handle_event/2,
-         deliver/2,
+         deliver/3,
          settle/4,
          credit/4,
          dequeue/4,
@@ -347,27 +347,26 @@ credit(CTag, Credit, Drain, #stream_client{readers = Readers0,
     {State#stream_client{readers = Readers}, [{send_credit_reply, length(Msgs)},
                                               {deliver, CTag, true, Msgs}] ++ Actions}.
 
-deliver(QSs, #delivery{confirm = Confirm} = Delivery) ->
+deliver(QSs, Message, Options) ->
     lists:foldl(
-      fun({_Q, stateless}, {Qs, Actions}) ->
-              %% TODO what do we do with stateless?
-              %% QRef = amqqueue:get_pid(Q),
-              %% ok = rabbit_fifo_client:untracked_enqueue(
-              %%        [QRef], Delivery#delivery.message),
+      fun({Q, stateless}, {Qs, Actions}) ->
+              LeaderPid = amqqueue:get_pid(Q),
+              ok = osiris:write(LeaderPid, undefined, 0, msg_to_iodata(Message)),
               {Qs, Actions};
          ({Q, S0}, {Qs, Actions}) ->
-              S = deliver(Confirm, Delivery, S0),
+              S = deliver0(maps:get(correlation, Options, undefined),
+                           Message, S0),
               {[{Q, S} | Qs], Actions}
       end, {[], []}, QSs).
 
-deliver(_Confirm, #delivery{message = Msg, msg_seq_no = MsgId},
-       #stream_client{name = Name,
-                      leader = LeaderPid,
-                      writer_id = WriterId,
-                      next_seq = Seq,
-                      correlation = Correlation0,
-                      soft_limit = SftLmt,
-                      slow = Slow0} = State) ->
+deliver0(MsgId, Msg,
+         #stream_client{name = Name,
+                        leader = LeaderPid,
+                        writer_id = WriterId,
+                        next_seq = Seq,
+                        correlation = Correlation0,
+                        soft_limit = SftLmt,
+                        slow = Slow0} = State) ->
     ok = osiris:write(LeaderPid, WriterId, Seq, msg_to_iodata(Msg)),
     Correlation = case MsgId of
                       undefined ->

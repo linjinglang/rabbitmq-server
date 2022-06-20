@@ -66,8 +66,7 @@ description() ->
 serialise_events() -> false.
 
 route(#exchange {name      = Name,
-                 arguments = Args},
-      #delivery {message = Msg}) ->
+                 arguments = Args}, Msg) ->
     case ets:lookup(?HASH_RING_STATE_TABLE, Name) of
         []  ->
             [];

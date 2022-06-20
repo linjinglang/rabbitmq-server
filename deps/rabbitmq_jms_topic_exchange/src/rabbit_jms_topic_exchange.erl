@@ -97,7 +97,7 @@ serialise_events() -> false.
 
 % Route messages
 route( #exchange{name = XName}
-     , #delivery{message = #basic_message{content = MessageContent, routing_keys = RKs}}
+     , #basic_message{content = MessageContent, routing_keys = RKs}
      ) ->
     case get_binding_funs_x(XName) of
         not_found ->

@@ -24,7 +24,7 @@
 
 %% The no_return is there so that we can have an "invalid" exchange
 %% type (see rabbit_exchange_type_invalid).
--callback route(rabbit_types:exchange(), rabbit_types:delivery()) ->
+-callback route(rabbit_types:exchange(), rabbit_types:message()) ->
     rabbit_router:match_result().
 
 %% called BEFORE declaration, to check args etc; may exit with #amqp_error{}

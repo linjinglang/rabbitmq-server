@@ -36,7 +36,7 @@ serialise_events() -> false.
 
 %% NB: This may return duplicate results in some situations (that's ok)
 route(#exchange{name = X},
-      #delivery{message = #basic_message{routing_keys = Routes}}) ->
+      #basic_message{routing_keys = Routes}) ->
     lists:append([begin
                       Words = split_topic_key(RKey),
                       mnesia:async_dirty(fun trie_match/2, [X, Words])

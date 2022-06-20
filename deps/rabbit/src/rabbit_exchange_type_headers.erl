@@ -33,7 +33,7 @@ description() ->
 serialise_events() -> false.
 
 route(#exchange{name = Name},
-      #delivery{message = #basic_message{content = Content}}) ->
+      #basic_message{content = Content}) ->
     Headers = case (Content#content.properties)#'P_basic'.headers of
                   undefined -> [];
                   H         -> rabbit_misc:sort_field_table(H)

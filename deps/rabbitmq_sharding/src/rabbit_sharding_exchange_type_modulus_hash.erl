@@ -34,7 +34,7 @@ description() ->
 serialise_events() -> false.
 
 route(#exchange{name = Name},
-      #delivery{message = #basic_message{routing_keys = Routes}}) ->
+      #basic_message{routing_keys = Routes}) ->
     Qs = rabbit_router:match_routing_key(Name, ['_']),
     case length(Qs) of
         0 -> [];

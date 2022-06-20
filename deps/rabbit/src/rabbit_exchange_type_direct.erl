@@ -32,7 +32,7 @@ description() ->
 serialise_events() -> false.
 
 route(#exchange{name = Name},
-      #delivery{message = #basic_message{routing_keys = Routes}}) ->
+      #basic_message{routing_keys = Routes}) ->
     case rabbit_feature_flags:is_enabled(direct_exchange_routing_v2, non_blocking) of
         true ->
             route_v2(Name, Routes);
