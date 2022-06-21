@@ -25,13 +25,13 @@
               'undefined' | binary(), rabbit_amqqueue:name()) -> 'ok'.
 publish(Msg, Reason, X, RK, SourceQName) ->
     DLMsg = make_msg(Msg, Reason, X#exchange.name, RK, SourceQName),
-    Delivery = rabbit_basic:delivery(false, false, DLMsg, undefined),
+    % Delivery = rabbit_basic:delivery(false, false, DLMsg, undefined),
     {QNames, Cycles} = detect_cycles(Reason, DLMsg,
-                                     rabbit_exchange:route(X, Delivery)),
+                                     rabbit_exchange:route(X, DLMsg)),
     lists:foreach(fun log_cycle_once/1, Cycles),
     Qs0 = rabbit_amqqueue:lookup(QNames),
     Qs = rabbit_amqqueue:prepend_extra_bcc(Qs0),
-    _ = rabbit_queue_type:deliver(Qs, Delivery, stateless),
+    _ = rabbit_queue_type:deliver(Qs, DLMsg, #{}, stateless),
     ok.
 
 make_msg(Msg = #basic_message{content       = Content,

@@ -1325,6 +1325,8 @@ handle_method(#'basic.publish'{exchange    = ExchangeNameBin,
         {ok, Message} ->
             QNames = rabbit_exchange:route(Exchange, Message),
             Queues = rabbit_amqqueue:lookup(QNames),
+            [rabbit_channel:deliver_reply(RK, Message) ||
+             {virtual_reply_queue, RK} <- QNames],
             ok = process_routing_mandatory(Mandatory, Queues, Message, State0),
             rabbit_trace:tap_in(Message, QNames, ConnName, ChannelNum,
                                 Username, TraceState),

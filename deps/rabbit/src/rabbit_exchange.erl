@@ -405,19 +405,22 @@ info_all(VHostPath, Items, Ref, AggregatorPid) ->
     rabbit_control_misc:emitting_map(
       AggregatorPid, Ref, fun(X) -> info(X, Items) end, list(VHostPath)).
 
--spec route(rabbit_types:exchange(), rabbit_types:message())
-                 -> [rabbit_amqqueue:name()].
-
+-spec route(rabbit_types:exchange(), rabbit_types:message()) ->
+    [rabbit_amqqueue:name() | {virtual_reply_queue, binary()}].
 route(#exchange{name = #resource{virtual_host = VHost, name = RName} = XName,
                 decorators = Decorators} = X,
       #basic_message{routing_keys = RKs} = Message) ->
     case RName of
         <<>> ->
-            RKsSorted = lists:usort(RKs),
-            [rabbit_channel:deliver_reply(RK, Message) ||
-             RK <- RKsSorted, virtual_reply_queue(RK)],
-            [rabbit_misc:r(VHost, queue, RK) || RK <- RKsSorted,
-                                                not virtual_reply_queue(RK)];
+            [begin
+                 case virtual_reply_queue(RK) of
+                     false ->
+                         rabbit_misc:r(VHost, queue, RK);
+                     true ->
+                         {virtual_reply_queue, RK}
+                 end
+             end
+             || RK <- lists:usort(RKs)];
         _ ->
             Decs = rabbit_exchange_decorator:select(route, Decorators),
             lists:usort(route1(Message, Decs, {[X], XName, []}))
