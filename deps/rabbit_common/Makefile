@@ -19,6 +19,7 @@ LOCAL_DEPS = compiler crypto public_key sasl ssl syntax_tools tools xmerl
 DEPS = jsx recon credentials_obfuscation khepri
 
 dep_credentials_obfuscation = hex 3.1.0
+dep_khepri = git https://github.com/rabbitmq/khepri.git v0.4.1
 
 # FIXME: Use erlang.mk patched for RabbitMQ, while waiting for PRs to be
 # reviewed and merged.
